@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-// Define the type of items that can come from the AI
 type ScheduleItem = string | { date: string; time: string };
 
 type ParsedResult = {
+  title: string;
   summary: string;
   actionItems: ScheduleItem[];
   schedule: ScheduleItem[];
@@ -29,75 +29,77 @@ export async function POST(req: Request) {
     }
 
     const prompt = `
-You are an AI meeting assistant. Your task is to summarize the meeting text provided. 
-Return **strict JSON only** in the following format:
+You are an AI meeting assistant. Your task is to analyze meeting notes and extract key information.
+
+Analyze this meeting text and provide a JSON response with exactly this structure:
 
 {
-  "summary": "",        // a concise summary of the meeting
-  "actionItems": [],    // a list of action items the user is responsible for
-  "schedule": []        // a list of dates and times when each action item should be completed
+  "title": "A short, descriptive title for the meeting",
+  "summary": "A concise summary of what was discussed",
+  "actionItems": ["Action item 1", "Action item 2", "Action item 3"],
+  "schedule": ["Date/time for action item 1", "Date/time for action item 2", "Date/time for action item 3"]
 }
 
-You are an AI meeting assistant. Your task is to summarize the meeting text provided. Return STRICT JSON in the exact format below:
+CRITICAL INSTRUCTIONS:
+1. YOU MUST include ALL four fields: title, summary, actionItems, and schedule
+2. Create a descriptive title that captures the main topic (3-7 words)
+3. Summarize the key points concisely
+4. Extract action items that the user needs to complete
+5. For each action item, provide a date/time (use TBD if unknown)
+6. actionItems and schedule arrays MUST have the same length
+7. Return ONLY valid JSON, no other text
 
-{
-  "summary": "",        // a concise summary of the meeting
-  "actionItems": [],    // a list of action items the user is responsible for
-  "schedule": []        // a list of dates and times when each action item should be completed
-}
-
-Instructions:
-
-1. Summarize the meeting concisely in "summary".
-
-2. Extract all action items that the user is responsible for and list them all in "actionItems".  
-
-3. Provide the corresponding dates and times for each action item in the "schedule" array.  
-   - The "schedule" array must have the **same number of items and order as "actionItems"**.  
-   - Each item in "schedule" must be a **string**.  
-
-4. If a date or time is unknown, write "TBD" for that item.
-
-5. For vague time references in the meeting text such as "tomorrow", "next week", "next month", "next year", etc., do the following:  
-   - Convert them into **exact calendar dates** based on the meeting date.  
-   - If a time is mentioned, include it. If no time is mentioned, use "TBD" for the time.  
-   - Attach the calculated date/time to the corresponding action item.  
-   - Example: if the action item is "Submit report" and the meeting text says "Submit report by next Monday", output:  
-     "Submit report (2026-01-05 10:00AM)"  
-   - If no specific time is mentioned:  
-     "Submit report (given date + TBD)"  
-
-6. Ensure the JSON output is **strictly valid**:  
-   - No extra text or explanations outside the JSON.  
-   - Only include the keys "summary", "actionItems", and "schedule".  
-   - The "actionItems" and "schedule" arrays must correspond one-to-one.  
-   - All items in "actionItems" and "schedule" must be **strings**.
-
-
-Meeting text:
+Meeting text to analyze:
 ${meetingText}
 `;
 
+    console.log("Sending prompt to AI...");
+    console.log("Meeting text length:", meetingText.length);
+
     const completion = await client.chat.completions.create({
-      model: "llama-3.3-70b-versatile", // ✅ supported Groq model
+      model: "llama-3.3-70b-versatile",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.2,
+      response_format: { type: "json_object" }, // Force JSON response
     });
 
     const content = completion.choices[0]?.message?.content;
 
-    if (!content) throw new Error("AI returned empty content");
+    console.log("Raw AI response:", content);
+
+    if (!content) {
+      console.error("AI returned empty content");
+      throw new Error("AI returned empty content");
+    }
 
     // Safely parse the AI response
     let parsed: ParsedResult;
     try {
       parsed = JSON.parse(content) as ParsedResult;
     } catch (err) {
-      console.error("Failed to parse AI response:", content);
-      throw new Error("AI response not valid JSON");
+      console.error("Failed to parse AI response as JSON. Content:", content);
+      // Try to extract JSON from the response if it's wrapped in markdown
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          parsed = JSON.parse(jsonMatch[0]) as ParsedResult;
+        } catch (innerErr) {
+          throw new Error("AI response not valid JSON");
+        }
+      } else {
+        throw new Error("AI response not valid JSON");
+      }
     }
 
-    // Ensure actionItems and schedule are strings
+    // Log what we received
+    console.log("Parsed result:", {
+      title: parsed.title,
+      summaryLength: parsed.summary?.length,
+      actionItemsCount: parsed.actionItems?.length,
+      scheduleCount: parsed.schedule?.length,
+    });
+
+    // Ensure actionItems and schedule are strings and have default values
     const safeActionItems = Array.isArray(parsed.actionItems)
       ? parsed.actionItems.map((item: ScheduleItem) =>
           typeof item === "string" ? item : `${item.date} at ${item.time}`
@@ -110,8 +112,21 @@ ${meetingText}
         )
       : [];
 
+    // Ensure we always have a title
+    const title = parsed.title?.trim() || 
+                  meetingText.split(/\s+/).slice(0, 5).join(' ') + "..." ||
+                  "Meeting Summary";
+
+    console.log("Final response being sent:", {
+      title,
+      summaryLength: parsed.summary?.length,
+      actionItems: safeActionItems.length,
+      schedule: safeSchedule.length,
+    });
+
     return NextResponse.json({
-      summary: parsed.summary || "",
+      title: title,
+      summary: parsed.summary || "No summary generated.",
       actionItems: safeActionItems,
       schedule: safeSchedule,
     });

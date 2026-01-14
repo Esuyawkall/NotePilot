@@ -1,6 +1,7 @@
 "use client"; // if using App Router
 
 export type SummaryResult = {
+  title: string;
   summary: string;
   actionItems: string[];
   schedule: string[];

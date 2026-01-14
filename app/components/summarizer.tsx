@@ -1,8 +1,9 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
-import { useState } from "react";
 import { summarizeMeetingAPI, SummaryResult } from "@/lib/api";
+import { generateICS } from "@/lib/ics";
+import { parseScheduleText } from "@/lib/schedule";
 
 type SummarizerProps = {
   initialText?: string;
@@ -52,9 +53,32 @@ const Summarizer = ({ initialText = "" }: SummarizerProps) => {
     } finally {
       setLoading(false);
     }
-    
   };
-  
+
+  function addToCalendar(
+    scheduleItem: string,
+    title: string,
+    summary: string
+  ) {
+    const date = parseScheduleText(scheduleItem);
+
+    const ics = generateICS({
+      title,
+      description: summary,
+      startDate: date,
+    });
+
+    const blob = new Blob([ics], { type: "text/calendar" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${title}.ics`;
+    a.click();
+
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="w-full max-w-4xl mx-auto p-4 box-border">
       {/* FORM */}
@@ -112,46 +136,69 @@ const Summarizer = ({ initialText = "" }: SummarizerProps) => {
           id="summary-result"
           className="space-y-6 mt-10 text-black dark:text-white"
         >
-          <div>
-            <h2 className="text-xl font-semibold mb-2">Meeting Summary</h2>
-            <p className="max-w-prose leading-relaxed">
-              {result.summary}
-            </p>
-          </div>
-        
-          <div className="flex justify-between">
-          <div>
-            <h2 className="text-xl font-semibold mb-2">Action Items</h2>
-            {result.actionItems.length ? (
-              <ul className="list-disc pl-5 space-y-1">  
-                {result.actionItems.map((item, i) => (
-                  <li key={i}>{item}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-gray-500 text-sm">
-                No action items identified.
+          <h2 className="text-2xl font-bold mb-2 underline">{result.title}</h2>
+          <div className="ml-5">
+            <div>
+              <h2 className="text-xl font-semibold mb-2">Meeting Summary</h2>
+              <p className="max-w-prose leading-relaxed ml-2 mb-5">
+                {result.summary}
               </p>
-            )}
-          </div>
+            </div>
 
-          <div>
-            <h2 className="text-xl font-semibold mb-2">Schedule</h2>
-            {result.schedule.length ? (
-              <ul className="list-disc pl-5 space-y-1">
-                {result.schedule.map((item, i) => (
-                  <li key={i}>{item}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-gray-500 text-sm">
-                No scheduling information found.
-              </p>
-            )}
-          </div>
+            <div className="flex justify-between">
+              <div>
+                <h2 className="text-xl font-semibold mb-2">Action Items</h2>
+                {result.actionItems.length ? (
+                  <ul className="list-disc pl-5 space-y-1">
+                    {result.actionItems.map((item, i) => (
+                      <li key={i}>{item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-gray-500 text-sm">
+                    No action items identified.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <h2 className="text-xl font-semibold mb-2">Schedule</h2>
+                {result.schedule.length ? (
+                  <ul className="list-disc pl-5 space-y-1">
+                    {result.schedule.map((item, i) => (
+                      <li key={i}>
+                        {item}{" "}
+                        {item && item.trim() !== "" && !item.includes("TBD") ? (
+                          <button
+                            onClick={() =>
+                              addToCalendar(
+                                item,
+                                result.title || "Meeting",
+                                result.summary
+                              )
+                            }
+                            className="text-sm ml-2 px-2 py-1 rounded-2xl bg-blue-300 hover:bg-black/80 text-black dark:bg-green-300 dark:hover:bg-white/80 hover:text-white dark:hover:text-black"
+                              >
+                                Add to Calendar
+                              </button>
+                            ) : (
+                              <span className="text-sm text-gray-500 ml-2">(No date specified)</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-gray-500 text-sm">
+                    No scheduling information found.
+                  </p>
+                )}
+              </div>
+            </div>
         </div>
-        </div>
+    </div>
+
       )}
+      
     </div>
   );
 };
