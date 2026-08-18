@@ -46,7 +46,7 @@ Built with **Next.js App Router** and **React** for scalability, performance, an
 - **Tailwind CSS**
 - **JavaScript**
 
-### Backend (Planned / In Progress)
+### Backend
 - **Node.js**
 - **API routes / serverless functions**
 - **AI integration** (LLM-based summarization)

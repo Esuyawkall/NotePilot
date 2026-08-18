@@ -2,8 +2,30 @@
 @variant dark (.dark &);
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --panel: rgba(255, 255, 255, 0.82);
+  --panel-strong: #ffffff;
+  --muted: #475569;
+  --border: rgba(15, 23, 42, 0.12);
+  --shadow: rgba(15, 23, 42, 0.08);
+  --accent: #2563eb;
+  --accent-strong: #1d4ed8;
+  --accent-soft: #dbeafe;
+}
+
+.dark {
+  --background: #09090b;
+  --foreground: #f4f4f5;
+  --panel: rgba(24, 24, 27, 0.82);
+  --panel-strong: #18181b;
+  --muted: #a1a1aa;
+  --border: rgba(255, 255, 255, 0.12);
+  --shadow: rgba(0, 0, 0, 0.3);
+  --accent: #4ade80;
+  --accent-strong: #22c55e;
+  --accent-soft: rgba(74, 222, 128, 0.16);
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -13,32 +35,34 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not(.dark) {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-.dark {
-  color-scheme: dark;
+html {
+  background-color: var(--background);
+  color: var(--foreground);
+  scrollbar-gutter: stable;
 }
 
 body {
-  background: var(--background);
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top, rgba(37, 99, 235, 0.08), transparent 35%),
+    var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  transition: background-color 200ms ease, color 200ms ease;
 }
-button:hover{
+
+button {
   cursor: pointer;
 }
+
+button:disabled {
+  cursor: not-allowed;
+}
+
 .invert-with-dark {
   @apply invert-0;
 }
 
 html.dark .invert-with-dark {
   @apply invert;
-}
-html {
-  scrollbar-gutter: stable;
 }
