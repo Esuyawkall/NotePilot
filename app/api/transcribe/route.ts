@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
@@ -9,6 +9,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
 
+    const apiKey = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "Audio transcription is not configured. Add HF_TOKEN or HUGGINGFACE_API_KEY." },
+        { status: 500 }
+      );
+    }
+
     const audioBuffer = await file.arrayBuffer();
 
     const hfRes = await fetch(
@@ -16,7 +24,7 @@ export async function POST(req: Request) {
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+          Authorization: "Bearer " + apiKey,
           "Content-Type": "application/octet-stream",
           Accept: "application/json",
         },

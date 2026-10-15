@@ -7,7 +7,7 @@ const RootBody = ({ children }: { children: React.ReactNode }) => {
   return (
     <body
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} bg-background text-foreground antialiased`}
     >
       {children}
     </body>

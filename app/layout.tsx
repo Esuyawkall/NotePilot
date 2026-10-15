@@ -17,18 +17,26 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Meeting Summarizer",
-  description: "Summarize and schedule events discussed in your meetings powered by AI",
+  metadataBase: new URL("https://example.com"),
+  title: "NotePilot | AI Meeting Summarizer and Scheduler",
+  description:
+    "Summarize meetings, capture action items, track decisions, and schedule follow-up tasks with AI.",
+  keywords: [
+    "AI meeting summarizer",
+    "meeting scheduler",
+    "meeting notes",
+    "task automation",
+  ],
 };
 
-export default function RootLayout({ 
-  children }: { 
-    children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="en">
-      <RootBody>
-        {children}
-      </RootBody>
+    <html lang="en" suppressHydrationWarning>
+      <RootBody>{children}</RootBody>
     </html>
   );
 }

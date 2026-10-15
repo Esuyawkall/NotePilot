@@ -2,19 +2,52 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
 type ScheduleItem = string | { date: string; time: string };
+type StringListItem = string | { date: string; time: string };
 
 type ParsedResult = {
-  title: string;
-  summary: string;
-  actionItems: ScheduleItem[];
-  schedule: ScheduleItem[];
+  title?: string;
+  summary?: string;
+  keyPoints?: StringListItem[];
+  decisions?: StringListItem[];
+  actionItems?: ScheduleItem[];
+  nextSteps?: StringListItem[];
+  risks?: StringListItem[];
+  schedule?: ScheduleItem[];
 };
 
-// Initialize the Groq/OpenAI client
+const ensureStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item) => {
+    if (typeof item === "string") {
+      return item.trim();
+    }
+
+    if (item && typeof item === "object" && "date" in item && "time" in item) {
+      return `${String((item as { date?: string }).date || "")} ${String((item as { time?: string }).time || "")}`.trim();
+    }
+
+    return "";
+  }).filter(Boolean);
+};
+
+const normalizeSchedule = (value: unknown): string[] => {
+  const items = ensureStringArray(value);
+  if (items.length === 0) {
+    return ["TBD"]; 
+  }
+
+  return items;
+};
+
 const client = new OpenAI({
   apiKey: process.env.GROQ_API_KEY,
   baseURL: "https://api.groq.com/openai/v1",
 });
+
+const model = process.env.GROQ_MODEL?.trim() || "openai/gpt-oss-120b";
 
 export async function POST(req: Request) {
   try {
@@ -28,107 +61,88 @@ export async function POST(req: Request) {
       );
     }
 
+    if (!process.env.GROQ_API_KEY) {
+      return NextResponse.json(
+        { error: "AI summarization is not configured. Add GROQ_API_KEY." },
+        { status: 500 }
+      );
+    }
+
     const prompt = `
-You are an AI meeting assistant. Your task is to analyze meeting notes and extract key information.
+You are an AI meeting assistant. Analyze the meeting transcript and return valid JSON ONLY.
 
-Analyze this meeting text and provide a JSON response with exactly this structure:
-
+Return an object with exactly these keys:
 {
-  "title": "A short, descriptive title for the meeting",
-  "summary": "A concise summary of what was discussed",
-  "actionItems": ["Action item 1", "Action item 2", "Action item 3"],
-  "schedule": ["Date/time for action item 1", "Date/time for action item 2", "Date/time for action item 3"]
+  "title": "A short, descriptive title (3-7 words)",
+  "summary": "A concise summary of the meeting",
+  "keyPoints": ["brief highlight 1", "brief highlight 2"],
+  "decisions": ["decision 1", "decision 2"],
+  "actionItems": ["action item 1", "action item 2"],
+  "nextSteps": ["next step 1", "next step 2"],
+  "risks": ["risk or blocker 1", "risk or blocker 2"],
+  "schedule": ["Date or time for action item 1", "Date or time for action item 2"]
 }
 
-CRITICAL INSTRUCTIONS:
-1. YOU MUST include ALL four fields: title, summary, actionItems, and schedule
-2. Create a descriptive title that captures the main topic (3-7 words)
-3. Summarize the key points concisely
-4. Extract action items that the user needs to complete
-5. For each action item, provide a date/time (use TBD if unknown)
-6. actionItems and schedule arrays MUST have the same length
-7. Return ONLY valid JSON, no other text
+Rules:
+1. Return only valid JSON with no markdown fences or explanation.
+2. Include arrays as lists of strings.
+3. Use "TBD" when a date or time is not known.
+4. Keep actionItems and schedule arrays aligned by index.
+5. If some sections have no content, use empty arrays.
+6. The summary should be 2-4 sentences.
 
-Meeting text to analyze:
+Meeting transcript:
 ${meetingText}
 `;
 
-    console.log("Sending prompt to AI...");
-    console.log("Meeting text length:", meetingText.length);
-
     const completion = await client.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model,
       messages: [{ role: "user", content: prompt }],
       temperature: 0.2,
-      response_format: { type: "json_object" }, // Force JSON response
+      response_format: { type: "json_object" },
     });
 
     const content = completion.choices[0]?.message?.content;
 
-    console.log("Raw AI response:", content);
-
     if (!content) {
-      console.error("AI returned empty content");
       throw new Error("AI returned empty content");
     }
 
-    // Safely parse the AI response
     let parsed: ParsedResult;
     try {
       parsed = JSON.parse(content) as ParsedResult;
-    } catch (err) {
-      console.error("Failed to parse AI response as JSON. Content:", content);
-      // Try to extract JSON from the response if it's wrapped in markdown
+    } catch {
       const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          parsed = JSON.parse(jsonMatch[0]) as ParsedResult;
-        } catch (innerErr) {
-          throw new Error("AI response not valid JSON");
-        }
-      } else {
+      if (!jsonMatch) {
         throw new Error("AI response not valid JSON");
       }
+
+      parsed = JSON.parse(jsonMatch[0]) as ParsedResult;
     }
 
-    // Log what we received
-    console.log("Parsed result:", {
-      title: parsed.title,
-      summaryLength: parsed.summary?.length,
-      actionItemsCount: parsed.actionItems?.length,
-      scheduleCount: parsed.schedule?.length,
-    });
+    const safeActionItems = ensureStringArray(parsed.actionItems);
+    const safeSchedule = normalizeSchedule(parsed.schedule);
+    const safeScheduleLength = Math.max(safeActionItems.length, safeSchedule.length);
 
-    // Ensure actionItems and schedule are strings and have default values
-    const safeActionItems = Array.isArray(parsed.actionItems)
-      ? parsed.actionItems.map((item: ScheduleItem) =>
-          typeof item === "string" ? item : `${item.date} at ${item.time}`
-        )
-      : [];
+    const normalizedSchedule = Array.from({ length: safeScheduleLength }, (_, index) =>
+      safeSchedule[index] || "TBD"
+    );
 
-    const safeSchedule = Array.isArray(parsed.schedule)
-      ? parsed.schedule.map((item: ScheduleItem) =>
-          typeof item === "string" ? item : `${item.date} at ${item.time}`
-        )
-      : [];
-
-    // Ensure we always have a title
-    const title = parsed.title?.trim() || 
-                  meetingText.split(/\s+/).slice(0, 5).join(' ') + "..." ||
-                  "Meeting Summary";
-
-    console.log("Final response being sent:", {
-      title,
-      summaryLength: parsed.summary?.length,
-      actionItems: safeActionItems.length,
-      schedule: safeSchedule.length,
-    });
+    const title = parsed.title?.trim() ||
+      `${meetingText.split(/\s+/).slice(0, 5).join(" ")}${meetingText.split(/\s+/).length > 5 ? "..." : ""}` ||
+      "Meeting Summary";
 
     return NextResponse.json({
-      title: title,
-      summary: parsed.summary || "No summary generated.",
-      actionItems: safeActionItems,
-      schedule: safeSchedule,
+      title,
+      summary: parsed.summary?.trim() || "No summary generated.",
+      keyPoints: ensureStringArray(parsed.keyPoints),
+      decisions: ensureStringArray(parsed.decisions),
+      actionItems: safeActionItems.length
+        ? safeActionItems
+        : ["No action items identified."],
+      nextSteps: ensureStringArray(parsed.nextSteps),
+      risks: ensureStringArray(parsed.risks),
+      schedule: normalizedSchedule,
     });
   } catch (error) {
     console.error("Summarization error:", error);
