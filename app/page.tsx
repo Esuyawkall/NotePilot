@@ -80,7 +80,10 @@ export default function Page() {
 
         <div className="flex flex-col items-center gap-6 text-center mt-20">
           <h1 className="max-w-xxl text-3xl font-semibold leading-tight tracking-tight text-slate-900 dark:text-zinc-50 sm:text-4xl">
-            Meeting Summarizer and Scheduler
+            NotePilot </h1>
+          <h1 className="max-w-xxl text-2xl leading-tight tracking-tight text-slate-900 dark:text-zinc-50 sm:text-2xl">
+
+          Meeting Summarizer and Scheduler
           </h1>
           <p className="max-w-lg text-lg leading-8 text-slate-600 dark:text-zinc-400">
             Automatically summarize meetings, extract tasks, and schedule your next steps with AI.
