@@ -1,4 +1,5 @@
-# AI Meeting Summarizer & Scheduler
+#NotePilot
+## AI Meeting Summarizer & Scheduler
 
 An **AI-powered web application** that transforms online meetings into **clear summaries**, **actionable tasks**, and **smart schedules**.  
 Designed to reduce post-meeting confusion and help users turn conversations into execution.
